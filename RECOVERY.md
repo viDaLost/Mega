@@ -40,7 +40,34 @@ Exact player constructor values recovered from `SMW_Player` include:
 - `empDist = 128`
 - `pileDriverSpeed = 40`
 
-The web port now uses these values as its physics reference instead of the earlier guessed constants.
+The web port uses these values as its physics reference instead of the earlier guessed constants.
+
+## Recovered enemy FSM / weapon behavior
+
+`SMW_ActorBase` IL and the serialized PlayMaker FSM data were both inspected. The original actor logic alternates walking and idling via `PatrolWalkTime`, `PatrolWalkSpeed` and `PatrolIdleTime`, stops horizontal movement while shooting, and uses `ShootTimer` plus a projectile prefab for ranged attacks.
+
+Exact code-level behavior recovered from `SMW_ActorBase::ShootAtWorm_Action` includes:
+
+- attack-distance comparison against `40.0` game units for turret aiming;
+- turret angle limits at `25°`, `90°` and `155°`;
+- aiming animation directions at `45°`, `90°` and `135°`;
+- `shootAnimTimer = 3.0`;
+- movement is stopped while the actor is in the firing state;
+- serialized variables include `ProjectilePrefab`, `ShootTimer`, `FireAngle`, `MirrorAngle` and `ShootOffsetY`.
+
+Exact projectile constructor values recovered from managed IL:
+
+- bullet: `damageAmount = 1`;
+- tank rocket: `damageAmount = 1`, `fireAtStart = true`;
+- homing rocket: `damageAmount = 1`, `homeDamping = 1`, `homeSpeed = 15`, `noHomeTime = 3`, `fireAtStart = true`.
+
+The serialized FSM stream additionally exposes real per-prefab values. Common actor defaults found repeatedly are `PatrolIdleTime = 90`, `PatrolWalkTime = 120`, `PatrolWalkSpeed = 2`, and `PatrolRunSpeed = 10`. These timer values are frame/update counters in the original behavior, not browser seconds. Variants exist: for example some actors use walk speed `0.5` or `1`, and one patrol block uses idle time `45`.
+
+A helicopter-associated FSM block was identified by its original `Helicopter - Idle` SFX data. It contains `PatrolIdleTime = 45`, `PatrolWalkTime = 120`, `PatrolWalkSpeed = 2`, `PatrolRunSpeed = 10`, `RunSpeed = 5`, `ShootTimer = 5`, `ShootOffsetY = -20`, and `Shoot_CloseToWormXDist = 300`. It also periodically spawns a `Mine` with a serialized spawn time of `160`.
+
+Multiple original tank FSM blocks were identified through the `Tank - Idle` SFX and contain distinct `ShootTimer` values (`30`, `45`, `30`, `30`, `60`) for different tank variants. Bomber FSM blocks use `PatrolWalkSpeed = 2`, `PatrolRunSpeed = 10`, `RunSpeed = 5` and spawn paratrooper/bomb payloads through serialized `Move_Spawn*` variables.
+
+`app-v11.js` is the first browser build to model the recovered patrol/idle state machine, firing pauses, turret aiming, bullets, tank rockets and homing rockets. Where a prefab-to-FSM identity has not yet been proven, browser timing remains an adaptation rather than being labeled as an exact original value.
 
 ## Original level progression
 
@@ -69,7 +96,7 @@ Original Unity textures recovered from the supplied build include:
 - `Cutscene_Classic_Tex` / `Cutscene_Xmas2_Tex`
 - `Wojira_Egg_Tex` / `Worm_Trail1`
 
-For the web build, the original classic vehicle artwork was losslessly cropped into separate car, tank, UFO, helicopter and plane sprites. The runtime vehicle atlas was also rebuilt losslessly as an indexed PNG; pixel comparison against the RGBA source is exact.
+For the web build, the original classic vehicle artwork was losslessly cropped into separate car, tank, UFO, helicopter and plane sprites. The runtime vehicle atlas was also rebuilt losslessly as an indexed PNG; pixel comparison against the RGBA source is exact. All five recovered boss texture sets are present in the repository.
 
 ## Recovered actors / scene content
 
@@ -100,12 +127,13 @@ The repository currently contains:
 - recovered Wojira/background/ground graphics;
 - exact recovered 26-level Standard Adventure data;
 - verified original classic vehicle sprites and runtime atlas;
-- verified first boss sprite sheets, with fallback rendering for boss sheets that have not yet passed binary-integrity verification;
+- all five recovered boss sprite sheets;
 - recovered `SMW_Player` physics reference values;
+- recovered actor patrol/shooting state behavior and projectile constants;
 - boss damage handling, EMP, fire spit and ground-slam mechanics.
 
 ## GitHub Pages
 
-GitHub Pages is enabled and the deployment workflow is active. The latest verified deployment run completed successfully. Every push to `main` triggers `.github/workflows/deploy-pages.yml` and republishes the static game.
+GitHub Pages is enabled and the deployment workflow is active. Every push to `main` triggers `.github/workflows/deploy-pages.yml` and republishes the static game.
 
 Public URL: `https://vidalost.github.io/Mega/`
