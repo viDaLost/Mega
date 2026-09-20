@@ -1,0 +1,13 @@
+{
+  "name": "Мега Червь",
+  "short_name": "Мега Червь",
+  "description": "Русская веб-версия пиксельной аркады про гигантского червя.",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape-primary",
+  "background_color": "#08111c",
+  "theme_color": "#08111c",
+  "icons": [{"src":"icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
