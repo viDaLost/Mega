@@ -36,13 +36,15 @@
         <div><b>Съедено</b><span id="eatenText">0 / 10</span></div>
         <div><b>Счёт</b><span id="scoreText">0</span></div>
       </div>
-      <div class="hunger"><span>ГОЛОД</span><div><i id="hungerFill"></i></div></div>
+      <div class="hunger"><span>ЗДОРОВЬЕ</span><div><i id="hungerFill"></i></div></div>
       <canvas id="gameCanvas" aria-label="Игровое поле"></canvas>
       <div class="controls">
         <button id="leftBtn" aria-label="Повернуть влево">◀</button>
         <button id="boostBtn" class="boost" aria-label="Ускорение">⚡</button>
         <button id="rightBtn" aria-label="Повернуть вправо">▶</button>
-        <button id="abilityBtn" class="ability" aria-label="Огненный плевок">🔥</button>
+        <button id="abilityBtn" class="ability" aria-label="Плевок">🔥</button>
+        <button id="slamBtn" class="ability" aria-label="Удар о землю">💥</button>
+        <button id="empBtn" class="ability" aria-label="EMP">⚡<small id="empText">0/3</small></button>
       </div>
       <button id="pauseBtn" class="pause">Ⅱ</button>
     </section>
@@ -55,6 +57,7 @@
       </div>
     </section>
   </main>
+  <script src="assets/original-assets.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
