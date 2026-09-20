@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#0b132b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Мега Червь" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>Мега Червь</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <main id="app">
+    <section id="menu" class="screen active">
+      <div class="logo-wrap">
+        <div class="worm-logo">🪱</div>
+        <h1>МЕГА<br><span>ЧЕРВЬ</span></h1>
+        <p>Пиксельная аркада</p>
+      </div>
+      <div class="menu-card">
+        <button id="playBtn" class="primary">Играть</button>
+        <button id="howBtn">Как играть</button>
+        <button id="soundBtn">🔊 Звук: вкл.</button>
+      </div>
+      <p class="platform-note" id="platformNote">Работает в Safari и Telegram</p>
+    </section>
+
+    <section id="game" class="screen">
+      <div class="hud">
+        <div><b>Уровень</b><span id="levelText">1</span></div>
+        <div><b>Съедено</b><span id="eatenText">0 / 10</span></div>
+        <div><b>Счёт</b><span id="scoreText">0</span></div>
+      </div>
+      <div class="hunger"><span>ГОЛОД</span><div><i id="hungerFill"></i></div></div>
+      <canvas id="gameCanvas" aria-label="Игровое поле"></canvas>
+      <div class="controls">
+        <button id="leftBtn" aria-label="Повернуть влево">◀</button>
+        <button id="boostBtn" class="boost" aria-label="Ускорение">⚡</button>
+        <button id="rightBtn" aria-label="Повернуть вправо">▶</button>
+        <button id="abilityBtn" class="ability" aria-label="Огненный плевок">🔥</button>
+      </div>
+      <button id="pauseBtn" class="pause">Ⅱ</button>
+    </section>
+
+    <section id="modal" class="modal hidden">
+      <div class="dialog">
+        <h2 id="modalTitle">Как играть</h2>
+        <div id="modalBody"></div>
+        <button id="modalBtn" class="primary">Понятно</button>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
