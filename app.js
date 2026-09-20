@@ -15,31 +15,38 @@
 
   const ASSET_PATH = './assets/original/';
   const embedded = window.RECOVERED_ASSETS || {};
+  const recoveredAudio = window.RECOVERED_AUDIO || {};
+  const LEVELS = Array.isArray(window.SMW_LEVELS) ? window.SMW_LEVELS : [];
   const assetFiles = {
     ground: 'GroundStrip_Tex.png', background: 'Background_Classic_Tex.png', worm: 'Wojira_Tex.png',
     actors: 'Actors_Classic_Tex.png', fx: 'FX_Tex.png', hud: 'HUD_Tex.png',
     boss0: 'Actor_Bosses_Tex.png', boss1: 'Actor_Bosses1_Tex.png', boss2: 'Actor_Bosses2_Tex.png', boss3: 'Actor_Bosses3_Tex.png', boss4: 'Actor_Bosses4_Tex.png'
   };
-  // Values recovered from the original SMW_Player constructor (Unity 4.3.4f1).
   const ORIGINAL_PHYSICS = Object.freeze({
     topSpeed:15, lowSpeed:6, acceleration:.4, groundFriction:.4, launchBoost:3,
     turnAcceleration:5, turnMax:10, jumpTurnMax:4, jumpTurnAcceleration:.2,
     gravity:.35, downwardTopSpeed:40, healthMaxStart:100, healthPerSegment:4,
     startLength:5, startLengthMax:8, empDist:128, pileDriverSpeed:40
   });
-  // Original game units are converted to CSS pixels for the web canvas.
   const WORLD_UNIT = 12;
   const images = {};
   let assetsReady = false;
   async function loadAssets() {
     const jobs = Object.entries(assetFiles).map(([key, file]) => new Promise((resolve) => {
-      const im = new Image(); im.onload = () => { images[key] = im; resolve(); }; im.onerror = () => resolve(); im.src = embedded[file.replace(/\.png$/, '')] || (ASSET_PATH + file);
+      const im = new Image();
+      im.onload = () => { images[key] = im; resolve(); };
+      im.onerror = () => resolve();
+      im.src = embedded[file.replace(/\.png$/, '')] || (ASSET_PATH + file);
     }));
     await Promise.all(jobs); assetsReady = true; ui.play.textContent = 'Играть'; ui.play.disabled = false;
   }
   ui.play.disabled = true; ui.play.textContent = 'Загрузка…'; loadAssets();
 
   let W=0,H=0,groundY=0,last=0,running=false,paused=false,sound=true,frame=0;
+  function playSfx(name, volume=.55){
+    if(!sound || !recoveredAudio[name]) return;
+    try{ const a=new Audio(recoveredAudio[name]); a.volume=volume; a.play().catch(()=>{}); }catch{}
+  }
   const keys={left:false,right:false,boost:false};
   const state={score:0,level:1,eaten:0,target:10,health:100,combo:0,spitCooldown:0,slamCooldown:0,empCharge:0};
   const worm={x:160,y:320,vx:ORIGINAL_PHYSICS.lowSpeed*WORLD_UNIT,vy:0,angle:-0.25,speed:ORIGINAL_PHYSICS.topSpeed*WORLD_UNIT,radius:15,segments:ORIGINAL_PHYSICS.startLength,trail:[],airborne:false};
@@ -51,18 +58,53 @@
   }
   addEventListener('resize',resize,{passive:true}); resize();
 
-  function reset(){
-    Object.assign(state,{score:0,level:1,eaten:0,target:10,health:100,combo:0,spitCooldown:0,slamCooldown:0,empCharge:0});
-    Object.assign(worm,{x:W*.25,y:groundY+90,vx:ORIGINAL_PHYSICS.lowSpeed*WORLD_UNIT,vy:-40,angle:-.25,speed:ORIGINAL_PHYSICS.topSpeed*WORLD_UNIT,radius:15,segments:ORIGINAL_PHYSICS.startLength,trail:[],airborne:false});
-    entities=[];particles=[];shots=[];shockwaves=[];
-    for(let i=0;i<18;i++) spawnEntity(i*W/8+W*.45);
-    for(let i=0;i<5;i++) spawnCrystal(W*.6+i*W*.4);
+  function levelDef(){ return LEVELS.find(l=>l.number===state.level) || null; }
+  function levelTarget(def=levelDef()){ return def ? (def.bossStage ? 1 : Math.max(1,def.growthRequired)) : Math.min(40,10+state.level*3); }
+  function originalNameToType(name){
+    if(/EMP.*Crystal/i.test(name)) return 'crystal';
+    if(/Cow|Horse|Emu|Buffalo|Penguin|Reindeer|PolarBear/i.test(name)) return 'cow';
+    if(/Human|Soldier|Astronaut|Elf|Santa/i.test(name)) return 'human';
+    if(/Bird|Balloon/i.test(name)) return 'bird';
+    if(/Tank|Robot/i.test(name)) return 'tank';
+    if(/Car|Truck|Plow/i.test(name)) return 'car';
+    if(/Helicopter/i.test(name)) return 'helicopter';
+    if(/Plane|Bomber/i.test(name)) return 'plane';
+    if(/UFO|Satellite/i.test(name)) return 'ufo';
+    return null;
+  }
+  function levelSpawnPool(){
+    const def=levelDef(); if(!def) return ['human','human','cow','car','bird','tank'];
+    const pool=[];
+    for(const [name,count] of Object.entries(def.counts||{})){
+      const type=originalNameToType(name); if(!type || type==='crystal') continue;
+      const weight=Math.max(1,Math.min(12,Math.ceil(count/2)));
+      for(let i=0;i<weight;i++) pool.push(type);
+    }
+    return pool.length ? pool : ['human','cow','bird'];
+  }
+  function applyLevel(resetPopulation=true){
+    const def=levelDef(); state.target=levelTarget(def); state.eaten=0;
+    if(resetPopulation){
+      entities=[];
+      const pool=levelSpawnPool();
+      for(let i=0;i<18;i++) spawnEntity(i*W/8+W*.45,pool);
+      const crystals=def ? Math.max(2,Math.min(6,Math.ceil((def.counts.UndergroundEMPCrystal||3)/2))) : 3;
+      for(let i=0;i<crystals;i++) spawnCrystal(W*.6+i*W*.4);
+      if(def?.bossStage) entities.push({type:'boss',bossIndex:Math.max(0,Math.min(4,Math.floor((state.level-1)/5))),x:W*.82,y:groundY-42,vx:-8,w:72,h:72,alive:true,hp:8});
+    }
     updateHud();
   }
-  function spawnEntity(x=W+Math.random()*W){
-    const r=Math.random(); const type=r<.46?'human':r<.66?'cow':r<.82?'car':r<.92?'bird':'tank';
-    const y=type==='bird'?groundY-70-Math.random()*150:groundY-10;
-    entities.push({type,x,y,vx:type==='bird'?-35-Math.random()*35:-10-Math.random()*18,w:type==='car'||type==='tank'?34:20,h:type==='cow'?22:18,alive:true});
+  function reset(){
+    Object.assign(state,{score:0,level:1,eaten:0,target:levelTarget(LEVELS[0]),health:ORIGINAL_PHYSICS.healthMaxStart,combo:0,spitCooldown:0,slamCooldown:0,empCharge:0});
+    Object.assign(worm,{x:W*.25,y:groundY+90,vx:ORIGINAL_PHYSICS.lowSpeed*WORLD_UNIT,vy:-40,angle:-.25,speed:ORIGINAL_PHYSICS.topSpeed*WORLD_UNIT,radius:15,segments:ORIGINAL_PHYSICS.startLength,trail:[],airborne:false});
+    particles=[];shots=[];shockwaves=[]; applyLevel(true);
+  }
+  function spawnEntity(x=W+Math.random()*W,pool=levelSpawnPool()){
+    const type=pool[(Math.random()*pool.length)|0] || 'human';
+    const air=['bird','helicopter','plane','ufo'].includes(type);
+    const y=air?groundY-70-Math.random()*Math.min(190,groundY-30):groundY-10;
+    const dims={human:[18,24],cow:[30,22],car:[42,24],bird:[22,16],tank:[40,28],helicopter:[54,28],plane:[62,30],ufo:[42,24]}[type]||[20,20];
+    entities.push({type,x,y,vx:air?-35-Math.random()*35:-10-Math.random()*18,w:dims[0],h:dims[1],alive:true});
   }
   function spawnCrystal(x=W+Math.random()*W){ entities.push({type:'crystal',x,y:groundY+65+Math.random()*(H-groundY-120),vx:0,w:16,h:16,alive:true}); }
   function start(){ if(!assetsReady)return; ui.menu.classList.remove('active'); ui.game.classList.add('active'); running=true;paused=false;reset();last=performance.now();requestAnimationFrame(loop); }
@@ -74,24 +116,31 @@
   function vibrate(ms=20){try{tg?.HapticFeedback?.impactOccurred(ms>30?'medium':'light'); if(!tg&&navigator.vibrate)navigator.vibrate(ms);}catch{}}
 
   function eat(e){
-    if(e.type==='crystal') { e.alive=false; state.empCharge=Math.min(3,state.empCharge+1); state.score+=75; burst(e.x,e.y,'#b46cff'); vibrate(); updateHud(); return; }
+    if(e.type==='crystal') { e.alive=false; state.empCharge=Math.min(3,state.empCharge+1); state.score+=75; burst(e.x,e.y,'#b46cff'); playSfx('pickup_emp'); vibrate(); updateHud(); return; }
+    if(e.type==='boss'){
+      e.hp=(e.hp||1)-1; burst(e.x,e.y,'#ff9d2e'); state.score+=250; playSfx('worm_fire_spit');
+      if(e.hp>0){ state.health=Math.max(1,state.health-5); return; }
+      e.alive=false; state.eaten=state.target;
+    }
     e.alive=false; const edible=e.type!=='tank';
     if(edible){
       state.eaten++; state.health=Math.min(100,state.health+(e.type==='cow'?24:14)); state.combo++; const mult=1+Math.min(4,state.combo*.15);
-      state.score+=Math.round((e.type==='car'?180:e.type==='cow'?130:e.type==='bird'?100:90)*mult); worm.segments=Math.min(28,worm.segments+.08); burst(e.x,e.y,e.type==='car'?'#ffb347':'#ef5350'); vibrate();
+      state.score+=Math.round((e.type==='car'?180:e.type==='cow'?130:e.type==='bird'?100:90)*mult); worm.segments=Math.min(ORIGINAL_PHYSICS.startLengthMax+20,worm.segments+.08); burst(e.x,e.y,e.type==='car'?'#ffb347':'#ef5350'); if(e.type==='cow')playSfx('cow_death'); vibrate();
     } else { state.health-=10; state.combo=0; burst(e.x,e.y,'#ff9d2e'); }
     if(state.eaten>=state.target){
-      state.level++;state.eaten=0;state.target=Math.min(40,10+state.level*3);worm.radius=Math.min(24,worm.radius+1.1);worm.speed=Math.min(270,worm.speed+7);state.health=100;
-      showModal(`Уровень ${state.level}`,`<p>Воджира становится больше и быстрее.</p><p>Новая цель: съесть <b>${state.target}</b> людей и существ.</p><p>${state.level>=2?'🔥 Плевок и удар о землю готовы к использованию.':'Продолжайте охоту.'}</p>`,'Продолжить');
+      if(state.level>=26){ running=false; playSfx('wmd_level_up'); showModal('Кампания пройдена',`<p>Восстановленные 26 уровней Standard_Adventure завершены.</p><p>Счёт: <b>${Math.floor(state.score).toLocaleString('ru-RU')}</b></p>`,'Играть снова',start); return; }
+      state.level++; worm.radius=Math.min(24,worm.radius+1.1); worm.speed=Math.min(ORIGINAL_PHYSICS.topSpeed*WORLD_UNIT*1.35,worm.speed+ORIGINAL_PHYSICS.acceleration*WORLD_UNIT); state.health=ORIGINAL_PHYSICS.healthMaxStart;
+      applyLevel(true); playSfx('wmd_level_up'); const def=levelDef();
+      showModal(`Уровень ${state.level}`,`<p>Загружена таблица <b>${def?.name||('Level'+state.level)}</b> из оригинального SMW_Spawner.</p><p>${def?.bossStage?'⚠️ Босс-этап.':'Нужно набрать рост: <b>'+state.target+'</b>.'}</p>`,'Продолжить');
     }
   }
   function burst(x,y,color){for(let i=0;i<10;i++)particles.push({x,y,vx:(Math.random()-.5)*180,vy:(Math.random()-.8)*170,life:.65,color});}
-  function spit(){if(state.spitCooldown>0||state.level<2)return;state.spitCooldown=1.15;const a=worm.angle;shots.push({x:worm.x+Math.cos(a)*24,y:worm.y+Math.sin(a)*24,vx:Math.cos(a)*460,vy:Math.sin(a)*460,life:1.15});vibrate(30);}
+  function spit(){if(state.spitCooldown>0||state.level<2)return;state.spitCooldown=1.15;const a=worm.angle;shots.push({x:worm.x+Math.cos(a)*24,y:worm.y+Math.sin(a)*24,vx:Math.cos(a)*460,vy:Math.sin(a)*460,life:1.15});playSfx('worm_fire_spit');vibrate(30);}
   function slam(){if(state.slamCooldown>0||worm.y>groundY-8||state.level<2)return;state.slamCooldown=2.2;worm.angle=Math.PI/2;worm.vy=520;worm.vx*=.35;vibrate(45);}
   function emp(){
     if(state.empCharge<3)return; state.empCharge=0; shockwaves.push({x:worm.x,y:worm.y,r:10,life:.75});
     for(const e of entities){ if(e.alive && ['tank','car'].includes(e.type) && Math.hypot(e.x-worm.x,e.y-worm.y)<W*.7){e.alive=false;state.score+=220;burst(e.x,e.y,'#a9d8ff');}}
-    vibrate(60); updateHud();
+    playSfx('pickup_emp',.7); vibrate(60); updateHud();
   }
 
   function update(dt){
@@ -113,7 +162,7 @@
       e.x+=e.vx*dt; if(e.type!=='crystal'&&e.x<-70){e.x=W+Math.random()*300;e.alive=true;} if(!e.alive)continue;
       const dx=e.x-worm.x,dy=e.y-worm.y;if(dx*dx+dy*dy<(worm.radius+e.w*.5)**2)eat(e);
     }
-    if(entities.filter(e=>e.alive&&e.type!=='crystal'&&e.x>0&&e.x<W+100).length<9)spawnEntity();
+    if(entities.filter(e=>e.alive&&e.type!=='crystal'&&e.type!=='boss'&&e.x>0&&e.x<W+100).length<9)spawnEntity();
     if(entities.filter(e=>e.alive&&e.type==='crystal').length<3)spawnCrystal();
     for(const s of shots){s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;for(const e of entities){if(e.alive&&e.type!=='crystal'&&Math.hypot(e.x-s.x,e.y-s.y)<30){e.alive=false;state.score+=120;burst(e.x,e.y,'#ff6f32');s.life=0;}}}
     shots=shots.filter(s=>s.life>0&&s.x>-30&&s.x<W+30&&s.y>-30&&s.y<H+30);
@@ -123,39 +172,25 @@
   }
 
   function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h));}
-  function tileImage(im, sx, sy, sw, sh, x, y, w, h, tileW=sw, tileH=sh){
-    if(!im){return;} for(let yy=y; yy<y+h; yy+=tileH){for(let xx=x;xx<x+w;xx+=tileW){ctx.drawImage(im,sx,sy,sw,sh,xx,yy,tileW,tileH);}}
-  }
   function drawBackground(){
     rect(0,0,W,groundY,'#183c70');
-    if(images.background){
-      const iw=220; for(let x=-20;x<W+iw;x+=iw)ctx.drawImage(images.background,0,0,128,128,x,groundY-150,iw,150);
-    }
+    if(images.background){const iw=220; for(let x=-20;x<W+iw;x+=iw)ctx.drawImage(images.background,0,0,128,128,x,groundY-150,iw,150);}
     rect(0,groundY,W,H-groundY,'#3b1d18');
-    if(images.ground){
-      for(let x=0;x<W;x+=256) ctx.drawImage(images.ground,0,0,256,256,x,groundY,256,34);
-    }
-    for(let y=groundY+34;y<H;y+=42){
-      rect(0,y,W,42, y<groundY+120 ? '#542621' : y<groundY+240 ? '#3b1d19' : '#241315');
-      ctx.globalAlpha=.16; rect(0,y,W,2,'#9b4632'); ctx.globalAlpha=1;
-    }
+    if(images.ground){for(let x=0;x<W;x+=256) ctx.drawImage(images.ground,0,0,256,256,x,groundY,256,34);}
+    for(let y=groundY+34;y<H;y+=42){rect(0,y,W,42, y<groundY+120 ? '#542621' : y<groundY+240 ? '#3b1d19' : '#241315');ctx.globalAlpha=.16; rect(0,y,W,2,'#9b4632'); ctx.globalAlpha=1;}
   }
   function drawEntity(e){
-    if(e.type==='crystal'){
-      ctx.save();ctx.translate(e.x,e.y);ctx.rotate(Math.PI/4);rect(-6,-6,12,12,'#c98cff');rect(-3,-3,6,6,'#f5ddff');ctx.restore();return;
+    if(e.type==='crystal'){ctx.save();ctx.translate(e.x,e.y);ctx.rotate(Math.PI/4);rect(-6,-6,12,12,'#c98cff');rect(-3,-3,6,6,'#f5ddff');ctx.restore();return;}
+    if(e.type==='boss'){
+      const b=images['boss'+(e.bossIndex||0)]||images.boss1;
+      if(b){const dw=90,dh=Math.min(130,dw*b.height/b.width);ctx.drawImage(b,e.x-dw/2,e.y-dh,dw,dh);return;}
     }
     const a=images.actors;
     if(a){
-      const src={
-        human:[48,178,16,30],
-        cow:[112,194,32,22],
-        car:[32,210,48,23],
-        bird:[128,166,20,15],
-        tank:[48,210,32,30]
-      }[e.type];
-      if(src){const [sx,sy,sw,sh]=src;const scale=e.type==='car'?1.1:e.type==='tank'?1.0:1.15;ctx.drawImage(a,sx,sy,sw,sh,e.x-sw*scale/2,e.y-sh*scale,sw*scale,sh*scale);return;}
+      const src={car:[176,32,48,28],tank:[128,64,48,30],helicopter:[128,160,64,32],plane:[0,32,128,64],ufo:[64,0,64,32]}[e.type];
+      if(src){const [sx,sy,sw,sh]=src;const scale=e.type==='plane'?.55:e.type==='helicopter'?.8:1;ctx.drawImage(a,sx,sy,sw,sh,e.x-sw*scale/2,e.y-sh*scale,sw*scale,sh*scale);return;}
     }
-    ctx.font='22px serif';ctx.textAlign='center';ctx.textBaseline='middle';const icon={human:'🏃',cow:'🐄',car:'🚗',bird:'🐦',tank:'🛡️'}[e.type];ctx.fillText(icon,e.x,e.y-8);
+    ctx.font='22px serif';ctx.textAlign='center';ctx.textBaseline='middle';const icon={human:'🏃',cow:'🐄',car:'🚗',bird:'🐦',tank:'🛡️',helicopter:'🚁',plane:'✈️',ufo:'🛸',boss:'🤖'}[e.type]||'•';ctx.fillText(icon,e.x,e.y-8);
   }
   function drawWorm(){
     const pts=worm.trail; const sheet=images.worm;
@@ -189,7 +224,7 @@
   addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;if(e.key==='ArrowRight'||e.key==='d')keys.right=false;if(e.key===' ')keys.boost=false;});
   $('#pauseBtn').onclick=()=>{paused=!paused;$('#pauseBtn').textContent=paused?'▶':'Ⅱ';};
   ui.play.onclick=start;
-  ui.how.onclick=()=>showModal('Как играть',`<p><b>Механики восстановлены по оригинальным экранам обучения из APK:</b></p><ul><li>Ешьте постоянно: метаболизм Воджиры непрерывно снижает здоровье.</li><li>Чтобы пройти уровень, нужно съесть всех требуемых людей; быстрые серии дают множитель/комбо.</li><li>⚡ Удерживайте ускорение под землёй — так Воджира выпрыгивает выше.</li><li>🔥 Плевок — отдельная открываемая способность.</li><li>💥 Удар-метеорит выполняется в падении.</li><li>💎 Фиолетовые кристаллы заряжают EMP; при полной шкале EMP активируется отдельной кнопкой.</li></ul><p class="recovery-note">Графика Воджиры и поверхности в этой сборке извлечена непосредственно из Unity-ресурсов APK.</p>`);
+  ui.how.onclick=()=>showModal('Как играть',`<p><b>Механики восстановлены по данным Unity APK:</b></p><ul><li>У основной кампании восстановлено 26 уровней Standard_Adventure.</li><li>Цели роста и состав противников берутся из оригинального SMW_Spawner.</li><li>⚡ Удерживайте ускорение под землёй.</li><li>🔥 Плевок открывается как отдельная способность.</li><li>💥 Удар-метеорит выполняется в падении.</li><li>💎 EMP-кристаллы заряжают EMP.</li></ul><p class="recovery-note">Базовые параметры движения взяты из SMW_Player версии 2.0.0.</p>`);
   ui.sound.onclick=()=>{sound=!sound;ui.sound.textContent=`${sound?'🔊':'🔇'} Звук: ${sound?'вкл.':'выкл.'}`;};
 
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
