@@ -19,7 +19,7 @@
   const LEVELS = Array.isArray(window.SMW_LEVELS) ? window.SMW_LEVELS : [];
   const assetFiles = {
     ground: 'GroundStrip_Tex.png', background: 'Background_Classic_Tex.png', worm: 'Wojira_Tex.png',
-    actors: 'Actors_Classic_Tex.png', fx: 'FX_Tex.png', hud: 'HUD_Tex.png',
+    actors: 'Actors_Web_Tex.png', fx: 'FX_Tex.png', hud: 'HUD_Tex.png',
     boss0: 'Actor_Bosses_Tex.png', boss1: 'Actor_Bosses1_Tex.png', boss2: 'Actor_Bosses2_Tex.png', boss3: 'Actor_Bosses3_Tex.png', boss4: 'Actor_Bosses4_Tex.png'
   };
   const ORIGINAL_PHYSICS = Object.freeze({
@@ -33,10 +33,7 @@
   let assetsReady = false;
   async function loadAssets() {
     const jobs = Object.entries(assetFiles).map(([key, file]) => new Promise((resolve) => {
-      const im = new Image();
-      im.onload = () => { images[key] = im; resolve(); };
-      im.onerror = () => resolve();
-      im.src = embedded[file.replace(/\.png$/, '')] || (ASSET_PATH + file);
+      const im = new Image(); im.onload = () => { images[key] = im; resolve(); }; im.onerror = () => resolve(); im.src = embedded[file.replace(/\.png$/, '')] || (ASSET_PATH + file);
     }));
     await Promise.all(jobs); assetsReady = true; ui.play.textContent = 'Играть'; ui.play.disabled = false;
   }
@@ -115,24 +112,46 @@
   }
   function vibrate(ms=20){try{tg?.HapticFeedback?.impactOccurred(ms>30?'medium':'light'); if(!tg&&navigator.vibrate)navigator.vibrate(ms);}catch{}}
 
+  function completeLevelIfReady(){
+    if(state.eaten<state.target) return false;
+    if(state.level>=26){
+      running=false;
+      playSfx('wmd_level_up');
+      showModal('Кампания пройдена',`<p>Восстановленные 26 уровней Standard_Adventure завершены.</p><p>Счёт: <b>${Math.floor(state.score).toLocaleString('ru-RU')}</b></p>`,'Играть снова',start);
+      return true;
+    }
+    state.level++;
+    worm.radius=Math.min(24,worm.radius+1.1);
+    worm.speed=Math.min(ORIGINAL_PHYSICS.topSpeed*WORLD_UNIT*1.35,worm.speed+ORIGINAL_PHYSICS.acceleration*WORLD_UNIT);
+    state.health=ORIGINAL_PHYSICS.healthMaxStart;
+    applyLevel(true);
+    playSfx('wmd_level_up');
+    const def=levelDef();
+    showModal(`Уровень ${state.level}`,`<p>Загружена таблица <b>${def?.name||('Level'+state.level)}</b> из оригинального SMW_Spawner.</p><p>${def?.bossStage?'⚠️ Босс-этап.':'Нужно набрать рост: <b>'+state.target+'</b>.'}</p>`,'Продолжить');
+    return true;
+  }
+  function hitBoss(e, damage=1, playerContact=false){
+    if(!e.alive) return;
+    e.hp=Math.max(0,(e.hp||1)-damage);
+    state.score+=250*damage;
+    burst(e.x,e.y,e.hp>0?'#ff9d2e':'#ff4a2e');
+    if(e.hp>0){
+      if(playerContact) state.health=Math.max(1,state.health-5);
+      return;
+    }
+    e.alive=false;
+    state.eaten=state.target;
+    completeLevelIfReady();
+  }
   function eat(e){
     if(e.type==='crystal') { e.alive=false; state.empCharge=Math.min(3,state.empCharge+1); state.score+=75; burst(e.x,e.y,'#b46cff'); playSfx('pickup_emp'); vibrate(); updateHud(); return; }
-    if(e.type==='boss'){
-      e.hp=(e.hp||1)-1; burst(e.x,e.y,'#ff9d2e'); state.score+=250; playSfx('worm_fire_spit');
-      if(e.hp>0){ state.health=Math.max(1,state.health-5); return; }
-      e.alive=false; state.eaten=state.target;
-    }
+    if(e.type==='boss'){ hitBoss(e,1,true); return; }
     e.alive=false; const edible=e.type!=='tank';
     if(edible){
       state.eaten++; state.health=Math.min(100,state.health+(e.type==='cow'?24:14)); state.combo++; const mult=1+Math.min(4,state.combo*.15);
       state.score+=Math.round((e.type==='car'?180:e.type==='cow'?130:e.type==='bird'?100:90)*mult); worm.segments=Math.min(ORIGINAL_PHYSICS.startLengthMax+20,worm.segments+.08); burst(e.x,e.y,e.type==='car'?'#ffb347':'#ef5350'); if(e.type==='cow')playSfx('cow_death'); vibrate();
     } else { state.health-=10; state.combo=0; burst(e.x,e.y,'#ff9d2e'); }
-    if(state.eaten>=state.target){
-      if(state.level>=26){ running=false; playSfx('wmd_level_up'); showModal('Кампания пройдена',`<p>Восстановленные 26 уровней Standard_Adventure завершены.</p><p>Счёт: <b>${Math.floor(state.score).toLocaleString('ru-RU')}</b></p>`,'Играть снова',start); return; }
-      state.level++; worm.radius=Math.min(24,worm.radius+1.1); worm.speed=Math.min(ORIGINAL_PHYSICS.topSpeed*WORLD_UNIT*1.35,worm.speed+ORIGINAL_PHYSICS.acceleration*WORLD_UNIT); state.health=ORIGINAL_PHYSICS.healthMaxStart;
-      applyLevel(true); playSfx('wmd_level_up'); const def=levelDef();
-      showModal(`Уровень ${state.level}`,`<p>Загружена таблица <b>${def?.name||('Level'+state.level)}</b> из оригинального SMW_Spawner.</p><p>${def?.bossStage?'⚠️ Босс-этап.':'Нужно набрать рост: <b>'+state.target+'</b>.'}</p>`,'Продолжить');
-    }
+    completeLevelIfReady();
   }
   function burst(x,y,color){for(let i=0;i<10;i++)particles.push({x,y,vx:(Math.random()-.5)*180,vy:(Math.random()-.8)*170,life:.65,color});}
   function spit(){if(state.spitCooldown>0||state.level<2)return;state.spitCooldown=1.15;const a=worm.angle;shots.push({x:worm.x+Math.cos(a)*24,y:worm.y+Math.sin(a)*24,vx:Math.cos(a)*460,vy:Math.sin(a)*460,life:1.15});playSfx('worm_fire_spit');vibrate(30);}
@@ -155,7 +174,14 @@
     if(!underground) worm.angle=Math.atan2(worm.vy,worm.vx);
     if(worm.x<-60)worm.x=W+50;if(worm.x>W+60)worm.x=-50;if(worm.y>H+70){worm.y=H-30;worm.angle=-Math.PI/2+(.3*(Math.random()-.5));}
     if(worm.y<20){worm.y=20;worm.angle=Math.abs(worm.angle)+.4;}
-    if(worm.y>=groundY && worm.vy>300){ shockwaves.push({x:worm.x,y:groundY,r:8,life:.55}); for(const e of entities){if(e.alive&&e.type!=='crystal'&&Math.abs(e.x-worm.x)<100&&Math.abs(e.y-groundY)<60){e.alive=false;state.score+=140;burst(e.x,e.y,'#ff7043');}} }
+    if(worm.y>=groundY && worm.vy>300){
+      shockwaves.push({x:worm.x,y:groundY,r:8,life:.55});
+      for(const e of [...entities]){
+        if(!e.alive||e.type==='crystal'||Math.abs(e.x-worm.x)>=100||Math.abs(e.y-groundY)>=60) continue;
+        if(e.type==='boss') hitBoss(e,2,false);
+        else {e.alive=false;state.score+=140;burst(e.x,e.y,'#ff7043');}
+      }
+    }
     worm.trail.unshift({x:worm.x,y:worm.y,a:worm.angle}); if(worm.trail.length>worm.segments*4)worm.trail.pop();
 
     for(const e of entities){
@@ -164,7 +190,15 @@
     }
     if(entities.filter(e=>e.alive&&e.type!=='crystal'&&e.type!=='boss'&&e.x>0&&e.x<W+100).length<9)spawnEntity();
     if(entities.filter(e=>e.alive&&e.type==='crystal').length<3)spawnCrystal();
-    for(const s of shots){s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;for(const e of entities){if(e.alive&&e.type!=='crystal'&&Math.hypot(e.x-s.x,e.y-s.y)<30){e.alive=false;state.score+=120;burst(e.x,e.y,'#ff6f32');s.life=0;}}}
+    for(const s of shots){
+      s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;
+      for(const e of [...entities]){
+        if(!e.alive||e.type==='crystal'||Math.hypot(e.x-s.x,e.y-s.y)>=30) continue;
+        if(e.type==='boss') hitBoss(e,1,false);
+        else {e.alive=false;state.score+=120;burst(e.x,e.y,'#ff6f32');}
+        s.life=0; break;
+      }
+    }
     shots=shots.filter(s=>s.life>0&&s.x>-30&&s.x<W+30&&s.y>-30&&s.y<H+30);
     for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=180*dt;p.life-=dt;}particles=particles.filter(p=>p.life>0);
     for(const s of shockwaves){s.r+=dt*430;s.life-=dt;}shockwaves=shockwaves.filter(s=>s.life>0);
@@ -187,7 +221,7 @@
     }
     const a=images.actors;
     if(a){
-      const src={car:[176,32,48,28],tank:[128,64,48,30],helicopter:[128,160,64,32],plane:[0,32,128,64],ufo:[64,0,64,32]}[e.type];
+      const src={car:[192,0,48,28],tank:[128,32,48,30],helicopter:[176,32,64,32],plane:[0,0,128,64],ufo:[128,0,64,32]}[e.type];
       if(src){const [sx,sy,sw,sh]=src;const scale=e.type==='plane'?.55:e.type==='helicopter'?.8:1;ctx.drawImage(a,sx,sy,sw,sh,e.x-sw*scale/2,e.y-sh*scale,sw*scale,sh*scale);return;}
     }
     ctx.font='22px serif';ctx.textAlign='center';ctx.textBaseline='middle';const icon={human:'🏃',cow:'🐄',car:'🚗',bird:'🐦',tank:'🛡️',helicopter:'🚁',plane:'✈️',ufo:'🛸',boss:'🤖'}[e.type]||'•';ctx.fillText(icon,e.x,e.y-8);
@@ -224,7 +258,7 @@
   addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;if(e.key==='ArrowRight'||e.key==='d')keys.right=false;if(e.key===' ')keys.boost=false;});
   $('#pauseBtn').onclick=()=>{paused=!paused;$('#pauseBtn').textContent=paused?'▶':'Ⅱ';};
   ui.play.onclick=start;
-  ui.how.onclick=()=>showModal('Как играть',`<p><b>Механики восстановлены по данным Unity APK:</b></p><ul><li>У основной кампании восстановлено 26 уровней Standard_Adventure.</li><li>Цели роста и состав противников берутся из оригинального SMW_Spawner.</li><li>⚡ Удерживайте ускорение под землёй.</li><li>🔥 Плевок открывается как отдельная способность.</li><li>💥 Удар-метеорит выполняется в падении.</li><li>💎 EMP-кристаллы заряжают EMP.</li></ul><p class="recovery-note">Базовые параметры движения взяты из SMW_Player версии 2.0.0.</p>`);
+  ui.how.onclick=()=>showModal('Как играть',`<p><b>Механики восстановлены по оригинальным экранам обучения из APK:</b></p><ul><li>Ешьте постоянно: метаболизм Воджиры непрерывно снижает здоровье.</li><li>У основной кампании восстановлено 26 уровней Standard_Adventure.</li><li>⚡ Удерживайте ускорение под землёй — так Воджира выпрыгивает выше.</li><li>🔥 Плевок — отдельная способность.</li><li>💥 Удар-метеорит выполняется в падении.</li><li>💎 Фиолетовые кристаллы заряжают EMP.</li></ul><p class="recovery-note">Параметры движения и таблицы уровней взяты непосредственно из Unity-данных версии 2.0.0.</p>`);
   ui.sound.onclick=()=>{sound=!sound;ui.sound.textContent=`${sound?'🔊':'🔇'} Звук: ${sound?'вкл.':'выкл.'}`;};
 
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
