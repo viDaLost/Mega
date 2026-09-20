@@ -17,9 +17,18 @@
   const embedded = window.RECOVERED_ASSETS || {};
   const assetFiles = {
     ground: 'GroundStrip_Tex.png', background: 'Background_Classic_Tex.png', worm: 'Wojira_Tex.png',
-    actors: 'Actors_Xmas2_Tex.png', fx: 'FX_Tex.png', hud: 'HUD_Tex.png',
+    actors: 'Actors_Classic_Tex.png', fx: 'FX_Tex.png', hud: 'HUD_Tex.png',
     boss0: 'Actor_Bosses_Tex.png', boss1: 'Actor_Bosses1_Tex.png', boss2: 'Actor_Bosses2_Tex.png', boss3: 'Actor_Bosses3_Tex.png', boss4: 'Actor_Bosses4_Tex.png'
   };
+  // Values recovered from the original SMW_Player constructor (Unity 4.3.4f1).
+  const ORIGINAL_PHYSICS = Object.freeze({
+    topSpeed:15, lowSpeed:6, acceleration:.4, groundFriction:.4, launchBoost:3,
+    turnAcceleration:5, turnMax:10, jumpTurnMax:4, jumpTurnAcceleration:.2,
+    gravity:.35, downwardTopSpeed:40, healthMaxStart:100, healthPerSegment:4,
+    startLength:5, startLengthMax:8, empDist:128, pileDriverSpeed:40
+  });
+  // Original game units are converted to CSS pixels for the web canvas.
+  const WORLD_UNIT = 12;
   const images = {};
   let assetsReady = false;
   async function loadAssets() {
@@ -33,7 +42,7 @@
   let W=0,H=0,groundY=0,last=0,running=false,paused=false,sound=true,frame=0;
   const keys={left:false,right:false,boost:false};
   const state={score:0,level:1,eaten:0,target:10,health:100,combo:0,spitCooldown:0,slamCooldown:0,empCharge:0};
-  const worm={x:160,y:320,vx:130,vy:0,angle:-0.25,speed:175,radius:15,segments:12,trail:[],airborne:false};
+  const worm={x:160,y:320,vx:ORIGINAL_PHYSICS.lowSpeed*WORLD_UNIT,vy:0,angle:-0.25,speed:ORIGINAL_PHYSICS.topSpeed*WORLD_UNIT,radius:15,segments:ORIGINAL_PHYSICS.startLength,trail:[],airborne:false};
   let entities=[],particles=[],shots=[],shockwaves=[];
 
   function resize(){
@@ -44,7 +53,7 @@
 
   function reset(){
     Object.assign(state,{score:0,level:1,eaten:0,target:10,health:100,combo:0,spitCooldown:0,slamCooldown:0,empCharge:0});
-    Object.assign(worm,{x:W*.25,y:groundY+90,vx:150,vy:-40,angle:-.25,speed:175,radius:15,segments:12,trail:[],airborne:false});
+    Object.assign(worm,{x:W*.25,y:groundY+90,vx:ORIGINAL_PHYSICS.lowSpeed*WORLD_UNIT,vy:-40,angle:-.25,speed:ORIGINAL_PHYSICS.topSpeed*WORLD_UNIT,radius:15,segments:ORIGINAL_PHYSICS.startLength,trail:[],airborne:false});
     entities=[];particles=[];shots=[];shockwaves=[];
     for(let i=0;i<18;i++) spawnEntity(i*W/8+W*.45);
     for(let i=0;i<5;i++) spawnCrystal(W*.6+i*W*.4);
@@ -114,6 +123,9 @@
   }
 
   function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h));}
+  function tileImage(im, sx, sy, sw, sh, x, y, w, h, tileW=sw, tileH=sh){
+    if(!im){return;} for(let yy=y; yy<y+h; yy+=tileH){for(let xx=x;xx<x+w;xx+=tileW){ctx.drawImage(im,sx,sy,sw,sh,xx,yy,tileW,tileH);}}
+  }
   function drawBackground(){
     rect(0,0,W,groundY,'#183c70');
     if(images.background){
@@ -177,7 +189,7 @@
   addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;if(e.key==='ArrowRight'||e.key==='d')keys.right=false;if(e.key===' ')keys.boost=false;});
   $('#pauseBtn').onclick=()=>{paused=!paused;$('#pauseBtn').textContent=paused?'▶':'Ⅱ';};
   ui.play.onclick=start;
-  ui.how.onclick=()=>showModal('Как играть',`<p><b>Механики восстановлены по оригинальным экранам обучения из APK:</b></p><ul><li>Ешьте постоянно: метаболизм Воджиры непрерывно снижает здоровье.</li><li>Чтобы пройти уровень, нужно съесть всех требуемых людей; быстрые серии дают множитель/комбо.</li><li>⚡ Удерживайте ускорение под землёй — так Воджира выпрыгивает выше.</li><li>🔥 Плевок — отдельная открываемая способность.</li><li>💥 Удар-метеорит выполняется в падении.</li><li>💎 Фиолетовые кристаллы заряжают EMP; при полной шкале EMP активируется отдельной кнопкой.</li></ul><p class="recovery-note">Графика Воджиры, поверхности земли, актёров и эффектов в этой сборке извлечена непосредственно из Unity-ресурсов APK.</p>`);
+  ui.how.onclick=()=>showModal('Как играть',`<p><b>Механики восстановлены по оригинальным экранам обучения из APK:</b></p><ul><li>Ешьте постоянно: метаболизм Воджиры непрерывно снижает здоровье.</li><li>Чтобы пройти уровень, нужно съесть всех требуемых людей; быстрые серии дают множитель/комбо.</li><li>⚡ Удерживайте ускорение под землёй — так Воджира выпрыгивает выше.</li><li>🔥 Плевок — отдельная открываемая способность.</li><li>💥 Удар-метеорит выполняется в падении.</li><li>💎 Фиолетовые кристаллы заряжают EMP; при полной шкале EMP активируется отдельной кнопкой.</li></ul><p class="recovery-note">Графика Воджиры и поверхности в этой сборке извлечена непосредственно из Unity-ресурсов APK.</p>`);
   ui.sound.onclick=()=>{sound=!sound;ui.sound.textContent=`${sound?'🔊':'🔇'} Звук: ${sound?'вкл.':'выкл.'}`;};
 
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
