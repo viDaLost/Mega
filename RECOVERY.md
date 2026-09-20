@@ -104,6 +104,8 @@ The repository currently contains:
 - recovered `SMW_Player` physics reference values;
 - boss damage handling, EMP, fire spit and ground-slam mechanics.
 
-## GitHub Pages note
+## GitHub Pages
 
-The deployment workflow is present. The connected GitHub integration can push workflow changes but cannot create the repository's initial GitHub Pages site. Pages must be enabled once in repository Settings → Pages with **GitHub Actions** selected as the source; subsequent pushes can deploy automatically.
+GitHub Pages is enabled and the deployment workflow is active. The latest verified deployment run completed successfully. Every push to `main` triggers `.github/workflows/deploy-pages.yml` and republishes the static game.
+
+Public URL: `https://vidalost.github.io/Mega/`
