@@ -65,21 +65,50 @@ The serialized FSM stream additionally exposes real per-prefab values. Common ac
 
 A helicopter-associated FSM block was identified by its original `Helicopter - Idle` SFX data. It contains `PatrolIdleTime = 45`, `PatrolWalkTime = 120`, `PatrolWalkSpeed = 2`, `PatrolRunSpeed = 10`, `RunSpeed = 5`, `ShootTimer = 5`, `ShootOffsetY = -20`, and `Shoot_CloseToWormXDist = 300`. It also periodically spawns a `Mine` with a serialized spawn time of `160`.
 
-Multiple original tank FSM blocks were identified through the `Tank - Idle` SFX and contain distinct `ShootTimer` values (`30`, `45`, `30`, `30`, `60`) for different tank variants. Bomber FSM blocks use `PatrolWalkSpeed = 2`, `PatrolRunSpeed = 10`, `RunSpeed = 5` and spawn paratrooper/bomb payloads through serialized `Move_Spawn*` variables.
+Multiple original tank FSM blocks were identified through the `Tank - Idle` SFX. Their recovered `ShootTimer` family is `30, 45, 30, 30, 60` update ticks; the matching blocks use the common `PatrolIdleTime = 90`, `PatrolWalkTime = 120`, `PatrolWalkSpeed = 2` and `PatrolRunSpeed = 10` values. The browser profiles therefore use 30/45/60-tick firing tiers for light/medium/heavier tank behavior while retaining the recovered projectile constants.
+
+Three bomber FSM families were separated by their serialized payload prefab references:
+
+- `Bomber1` drops `Paratrooper`; its spawn-time range is `60–75` update ticks, with a simultaneous payload maximum of `10` and total maximum of `20`;
+- `Bomber2` drops `ParaDriller`; it uses the same recovered `60–75` update-tick family and `10 / 20` simultaneous/total limits;
+- `Bomber3` drops `Nuke`; its recovered spawn timer is `90` update ticks and its simultaneous/total maximum is `1 / 1`.
+
+Bomber FSM blocks also use `PatrolWalkSpeed = 2`, `PatrolRunSpeed = 10` and `RunSpeed = 5`. In the web port, paratrooper and ParaDriller payloads fall and become ground actors after landing, while the Nuke payload performs a radial explosion.
 
 `app-v11.js` was the first browser build to model the recovered patrol/idle state machine, firing pauses, turret aiming, bullets, tank rockets and homing rockets.
 
-`app-v12.js` keeps original spawn identities from `SMW_Spawner` instead of collapsing them into generic vehicles. Runtime profiles now distinguish `TankL`, `TankM`, `Helicopter1`, `Bomber1/3`, `UFO1`, `Satellite2` and soldiers. The common `90/120/2` patrol values are converted from update ticks, the helicopter uses its recovered `45/120/2` patrol block and `300` close-to-worm distance, and its serialized `Mine` spawn interval `160` is represented by falling/armed mines. Bomber payload attacks and tank-variant fire cadence are modeled separately. Where a prefab-to-FSM timer unit is still ambiguous, the browser value remains an explicitly documented adaptation rather than being claimed as an exact original timing.
+`app-v12.js` keeps original spawn identities from `SMW_Spawner` instead of collapsing them into generic vehicles. Runtime profiles distinguish `TankL`, `TankM`, `Helicopter1`, `Bomber1/3`, `UFO1`, `Satellite2` and soldiers. It also introduced helicopter mine drops and separate bomber payload attacks.
 
-## Original level progression
+`app-v13.js` maps the recovered tank timing tiers and the three bomber payload families described above instead of using one generic bomb behavior.
 
-`SMW_Spawner` contains 8 progression sets. `Standard_Adventure` was parsed into 26 gameplay levels and is stored in `assets/original-levels.js`.
+## Original level progression and spawn quotas
+
+`SMW_Spawner` contains 8 progression sets. `Standard_Adventure` was parsed into 26 gameplay levels. The compact progression table remains in `assets/original-levels.js`.
+
+The original `LevelProgressionArea1.plist` was also recovered intact from the Unity serialized data. It contains, per actor/prefab and per level, the original `Count`, `Max` and (where present) `SpawnDelay` values. `app-v14.js` embeds this richer table and uses it as the primary runtime spawn source.
+
+The v14 spawn ledger works as follows:
+
+- `Count` determines the initial active population for the specific original prefab;
+- `Max` limits how many instances of that prefab may be produced in total during the level;
+- `SpawnDelay` controls delayed replenishment where the original data supplies one;
+- each prefab is tracked independently, so `TankL`, `Helicopter1`, `Bomber1`, humans, animals, EMP crystals and other actors no longer share a single randomized respawn bucket.
+
+Examples recovered directly from the progression plist include:
+
+- Level 1: `CowCount = 7`, `CowMax = 40`; `Bird1Count = 8`, `Bird1Max = 30`; `UFO1Count = 3`, `UFO1Max = 6`; `UndergroundEMPCrystalCount = 5`, `UndergroundEMPCrystalMax = 10`, `SpawnDelay = 10`;
+- Level 7: `Helicopter1Count = 1`, `Helicopter1Max = 3`; `SoldierLCount = 5`, `SoldierLMax = 17`; EMP crystal `SpawnDelay = 15`;
+- Level 12: `TankLCount = 1`, `TankLMax = 5`; `SoldierG1Count = 7`, `SoldierG1Max = 20`; EMP crystal maximum `20` with `SpawnDelay = 10`;
+- Level 25: `Bomber3Count = 1` and the progression data constrains the heavy bomber/nuke encounter;
+- Level 26: `Bomber1Count = 1`, `BuffaloCount = 5`, `UndergroundEMPCrystalCount = 10`, and the EMP learning flags are enabled.
+
+Some boss-stage `Max` values are `1000`; this is preserved as evidence that those stages were designed around continuous replenishment rather than a fixed one-time wave. Across the recovered standard campaign, some levels contain close to ninety initial actor instances when all original `Count` fields are summed.
 
 Recovered growth requirements are:
 
 `15, 25, 25, 30, boss, 20, 25, 30, 35, boss, 20, 30, 35, 40, boss, 40, 45, 45, 45, boss, 45, 75, 90, 100, boss, boss`.
 
-The original serialized counts for actors such as cows, humans, soldiers, cars, tanks, helicopters, bombers, UFOs, satellites, buffalo, horses and EMP crystals are preserved per level. Boss stages are identified at levels 5, 10, 15, 20, 25 and 26.
+Boss stages are identified at levels 5, 10, 15, 20, 25 and 26.
 
 ## Recovered graphics
 
@@ -127,13 +156,15 @@ The repository currently contains:
 - Telegram Mini App integration;
 - PWA/offline support;
 - recovered Wojira/background/ground graphics;
-- exact recovered 26-level Standard Adventure data;
+- recovered 26-level Standard Adventure progression;
+- exact per-prefab `Count / Max / SpawnDelay` spawn quota data for the standard campaign in v14;
 - verified original classic vehicle sprites and runtime atlas;
 - all five recovered boss sprite sheets;
 - recovered `SMW_Player` physics reference values;
 - recovered actor patrol/shooting state behavior and projectile constants;
-- separate `TankL`/`TankM`/helicopter/bomber/UFO/satellite runtime identities;
-- helicopter mine drops and bomber payload attacks;
+- separate tank/helicopter/bomber/UFO/satellite/soldier runtime identities;
+- helicopter mine drops;
+- `Paratrooper`, `ParaDriller` and `Nuke` bomber payload families;
 - boss damage handling, EMP, fire spit and ground-slam mechanics.
 
 ## GitHub Pages
