@@ -19,7 +19,9 @@ jobs:
           m=re.search(r"atob\('([^']+)'\)", s)
           if not m:
               raise SystemExit('embedded gzip payload not found')
-          data=base64.b64decode(m.group(1))
+          b64=m.group(1)
+          b64 += '=' * (-len(b64) % 4)
+          data=base64.b64decode(b64)
           if data[:2] != b'\x1f\x8b':
               raise SystemExit('not gzip data')
           flg=data[3]; pos=10
