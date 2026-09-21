@@ -31,7 +31,8 @@ jobs:
               pos=data.index(b'\0',pos)+1
           if flg & 2:
               pos += 2
-          src=zlib.decompress(data[pos:-8], -15).decode('utf-8')
+          raw=zlib.decompress(data[pos:-8], -15)
+          src=raw.decode('utf-8', errors='replace')
           pathlib.Path('app-v15.source.js').write_text(src)
           PY
       - name: Commit decoded source
