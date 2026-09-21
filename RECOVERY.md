@@ -67,7 +67,9 @@ A helicopter-associated FSM block was identified by its original `Helicopter - I
 
 Multiple original tank FSM blocks were identified through the `Tank - Idle` SFX and contain distinct `ShootTimer` values (`30`, `45`, `30`, `30`, `60`) for different tank variants. Bomber FSM blocks use `PatrolWalkSpeed = 2`, `PatrolRunSpeed = 10`, `RunSpeed = 5` and spawn paratrooper/bomb payloads through serialized `Move_Spawn*` variables.
 
-`app-v11.js` is the first browser build to model the recovered patrol/idle state machine, firing pauses, turret aiming, bullets, tank rockets and homing rockets. Where a prefab-to-FSM identity has not yet been proven, browser timing remains an adaptation rather than being labeled as an exact original value.
+`app-v11.js` was the first browser build to model the recovered patrol/idle state machine, firing pauses, turret aiming, bullets, tank rockets and homing rockets.
+
+`app-v12.js` keeps original spawn identities from `SMW_Spawner` instead of collapsing them into generic vehicles. Runtime profiles now distinguish `TankL`, `TankM`, `Helicopter1`, `Bomber1/3`, `UFO1`, `Satellite2` and soldiers. The common `90/120/2` patrol values are converted from update ticks, the helicopter uses its recovered `45/120/2` patrol block and `300` close-to-worm distance, and its serialized `Mine` spawn interval `160` is represented by falling/armed mines. Bomber payload attacks and tank-variant fire cadence are modeled separately. Where a prefab-to-FSM timer unit is still ambiguous, the browser value remains an explicitly documented adaptation rather than being claimed as an exact original timing.
 
 ## Original level progression
 
@@ -130,6 +132,8 @@ The repository currently contains:
 - all five recovered boss sprite sheets;
 - recovered `SMW_Player` physics reference values;
 - recovered actor patrol/shooting state behavior and projectile constants;
+- separate `TankL`/`TankM`/helicopter/bomber/UFO/satellite runtime identities;
+- helicopter mine drops and bomber payload attacks;
 - boss damage handling, EMP, fire spit and ground-slam mechanics.
 
 ## GitHub Pages
