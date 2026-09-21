@@ -1,0 +1,32 @@
+name: Decode current browser source
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/decode-source.yml'
+permissions:
+  contents: write
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode app-v15 wrapper
+        run: |
+          python - <<'PY'
+          import re, base64, gzip, pathlib
+          p=pathlib.Path('app-v15.js')
+          s=p.read_text()
+          m=re.search(r"atob\('([^']+)'\)", s)
+          if not m:
+              raise SystemExit('embedded gzip payload not found')
+          src=gzip.decompress(base64.b64decode(m.group(1))).decode('utf-8')
+          pathlib.Path('app-v15.source.js').write_text(src)
+          PY
+      - name: Commit decoded source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app-v15.source.js
+          git diff --cached --quiet || git commit -m 'Expose decoded app-v15 source for recovery work'
+          git push
