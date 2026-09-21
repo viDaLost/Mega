@@ -14,13 +14,24 @@ jobs:
       - name: Decode app-v15 wrapper
         run: |
           python - <<'PY'
-          import re, base64, gzip, pathlib
-          p=pathlib.Path('app-v15.js')
-          s=p.read_text()
+          import re, base64, pathlib, zlib, struct
+          s=pathlib.Path('app-v15.js').read_text()
           m=re.search(r"atob\('([^']+)'\)", s)
           if not m:
               raise SystemExit('embedded gzip payload not found')
-          src=gzip.decompress(base64.b64decode(m.group(1))).decode('utf-8')
+          data=base64.b64decode(m.group(1))
+          if data[:2] != b'\x1f\x8b':
+              raise SystemExit('not gzip data')
+          flg=data[3]; pos=10
+          if flg & 4:
+              xlen=struct.unpack_from('<H',data,pos)[0]; pos += 2+xlen
+          if flg & 8:
+              pos=data.index(b'\0',pos)+1
+          if flg & 16:
+              pos=data.index(b'\0',pos)+1
+          if flg & 2:
+              pos += 2
+          src=zlib.decompress(data[pos:-8], -15).decode('utf-8')
           pathlib.Path('app-v15.source.js').write_text(src)
           PY
       - name: Commit decoded source
