@@ -20,14 +20,22 @@
       <div class="logo-wrap">
         <div class="worm-logo">🪱</div>
         <h1>МЕГА<br><span>ЧЕРВЬ</span></h1>
-        <p>Пиксельная аркада</p>
+        <p>Восстановленная версия 2.0.0</p>
       </div>
       <div class="menu-card">
+        <div class="campaign-picker" aria-label="Выбор кампании">
+          <span class="campaign-label">Кампания</span>
+          <strong id="campaignText">🌎 Standard Adventure</strong>
+          <div class="campaign-row">
+            <button id="standardBtn" class="campaign-btn selected" type="button">🌎 Standard</button>
+            <button id="xmasBtn" class="campaign-btn" type="button">🎄 Xmas2</button>
+          </div>
+        </div>
         <button id="playBtn" class="primary">Играть</button>
         <button id="howBtn">Как играть</button>
         <button id="soundBtn">🔊 Звук: вкл.</button>
       </div>
-      <p class="platform-note" id="platformNote">Работает в Safari и Telegram</p>
+      <p class="platform-note" id="platformNote">Работает в Safari, PWA и Telegram</p>
     </section>
 
     <section id="game" class="screen">
@@ -59,7 +67,6 @@
   </main>
   <script src="assets/original-assets.js"></script>
   <script src="assets/original-audio.js"></script>
-  <script src="assets/original-levels.js"></script>
-  <script src="app-v15.js"></script>
+  <script src="app-v16.js"></script>
 </body>
 </html>
