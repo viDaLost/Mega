@@ -1,0 +1,46 @@
+name: Decode v16 browser source
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/decode-v16.yml'
+permissions:
+  contents: write
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode app-v16 wrapper
+        run: |
+          python - <<'PY'
+          import re, base64, pathlib, zlib, struct
+          s=pathlib.Path('app-v16.js').read_text()
+          m=re.search(r"atob\('([^']+)'\)", s)
+          if not m:
+              raise SystemExit('embedded gzip payload not found')
+          data=base64.b64decode(m.group(1))
+          if data[:2] != b'\x1f\x8b':
+              raise SystemExit('not gzip data')
+          flg=data[3]; pos=10
+          if flg & 4:
+              xlen=struct.unpack_from('<H',data,pos)[0]; pos += 2+xlen
+          if flg & 8:
+              pos=data.index(b'\0',pos)+1
+          if flg & 16:
+              pos=data.index(b'\0',pos)+1
+          if flg & 2:
+              pos += 2
+          raw=zlib.decompress(data[pos:-8], -15)
+          pathlib.Path('app-v16.source.js').write_bytes(raw)
+          print('decoded bytes', len(raw))
+          PY
+      - name: Validate JavaScript syntax
+        run: node --check app-v16.source.js
+      - name: Commit decoded source
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app-v16.source.js
+          git diff --cached --quiet || git commit -m 'Expose validated v16 source without runtime gzip wrapper'
+          git push
